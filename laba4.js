@@ -2,6 +2,7 @@ const http = require('http');
 const { Command } = require('commander');
 const fs = require('fs').promises;
 const path = require('path');
+const superagent = require('superagent');
 
 const program = new Command();
 
@@ -21,14 +22,20 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET') {
     try {
-      await fs.access(filePath); // Перевіряємо доступність файлу
       const data = await fs.readFile(filePath);
       res.writeHead(200, { 'Content-Type': 'image/jpeg' });
       res.end(data);
     } catch (err) {
-      console.error(`File not found: ${filePath}`); // Лог помилки
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('404 Not Found: Image not found'); // Чітке повідомлення про помилку 404
+      // If the file is not found, fetch the image from http.cat
+      try {
+        const response = await superagent.get(`https://http.cat/${httpCode}`);
+        await fs.writeFile(filePath, response.body); // Save the image in cache
+        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+        res.end(response.body);
+      } catch (fetchError) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Image not found');
+      }
     }
   } 
   else if (req.method === 'PUT') {
@@ -51,9 +58,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end('Image deleted');
     } catch (err) {
-      console.error(`Failed to delete file: ${filePath}`); // Лог помилки
       res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('404 Not Found: Image not found'); // Чітке повідомлення про помилку 404
+      res.end('Image not found');
     }
   } else {
     res.writeHead(405, { 'Content-Type': 'text/plain' });
